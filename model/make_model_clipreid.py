@@ -72,9 +72,9 @@ class build_transformer(nn.Module):
         self.view_num = view_num
         self.sie_coe = cfg.MODEL.SIE_COE   
 
-        self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier = nn.Linear(self.in_planes*2, self.num_classes, bias=False)
         self.classifier.apply(weights_init_classifier)
-        self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
+        self.classifier_proj = nn.Linear(self.in_planes_proj*2, self.num_classes, bias=False)
         self.classifier_proj.apply(weights_init_classifier)
 
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
@@ -96,6 +96,9 @@ class build_transformer(nn.Module):
             self.image_encoder = clip_model.dino
         elif cfg.MODEL.VISUAL_MODEL == 'clipreid_vit':
             self.image_encoder = clip_model.visual
+            self.dino_encoder = clip_model.dino
+            for param in self.dino_encoder.parameters():
+                param.requires_grad = False
         else:
             raise ValueError("The visual model is not predefined in the project.")
 
@@ -237,12 +240,23 @@ class build_transformer(nn.Module):
             img_feature = image_features[:,0]
             img_feature_proj = image_features_proj[:,0]
 
+            image_features_last_dino, image_features_dino, image_features_proj_dino = self.dino_encoder(x, cv_embed)
+            img_feature_last_dino = image_features_last_dino[:,0]
+            img_feature_dino = image_features_dino[:,0]
+            img_feature_proj_dino = image_features_proj_dino[:,0]
+
+
+
         feat = self.bottleneck(img_feature) 
-        feat_proj = self.bottleneck_proj(img_feature_proj) 
-        
+        feat_proj = self.bottleneck_proj(img_feature_proj)
+
+        feat_dino = self.bottleneck(img_feature_dino)
+        feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
+
+
         if self.training:
-            cls_score = self.classifier(feat)
-            cls_score_proj = self.classifier_proj(feat_proj)
+            cls_score = self.classifier(torch.cat((feat, feat_dino), dim=1))
+            cls_score_proj = self.classifier_proj(torch.cat((feat_proj,feat_proj_dino),dim=1))
             return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj], img_feature_proj
 
         else:
