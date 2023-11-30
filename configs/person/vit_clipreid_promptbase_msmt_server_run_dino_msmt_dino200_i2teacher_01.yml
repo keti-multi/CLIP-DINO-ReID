@@ -8,17 +8,16 @@ MODEL:
   ID_LOSS_WEIGHT : 0.25
   TRIPLET_LOSS_WEIGHT : 1.0
   I2T_LOSS_WEIGHT : 1.0
+  I2Teacher_LOSS_WEIGHT : 0.1
   VISUAL_MODEL : 'clipreid_vit'
+
 #  VISUAL_MODEL : 'dino_vit'
   # SIE_CAMERA: True
   # SIE_COE : 1.0
 #  LRP : 'LRP'
   LRP : ''
-#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_taskawarePromptBase_on_MSMT17/ViT-B-16_stage1_120.pth"
-#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT17_Test_GradCAM_zero_shot_pretrained/ViT-B-16_stage1_120.pth"
-#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep85_dino_encoder/ViT-B-16_stage1_120.pth"
-
-#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep20_dino_encoder_ratio/ViT-B-16_stage1_120.pth"
+  # pure CLIP trained prompt parameter
+  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_pure_Test_on_MSMT17/ViT-B-16_stage1_120.pth"
 
 #  DINO_PRETRAIN_PATH : "/data/keti/syh/exp/DINO_MSMT17_train/checkpoint_15ep.pth"
 #  DINO_PRETRAIN_PATH: "/data/keti/syh/exp/DINO_MSMT17_train/checkpoint_85ep.pth"
@@ -28,7 +27,7 @@ MODEL:
 #  DINO_PRETRAIN_PATH: "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0057.pth"
 #  DINO_PRETRAIN_PATH: "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0060.pth"
   DINO_TEACHER : True
-  DINO_PRETRAIN_PATH : "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0140.pth"
+  DINO_PRETRAIN_PATH : "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0200.pth"
 
 #  DINO_PRETRAIN_PATH: "/data/keti/syh/exp/DINO_MSMT17_train/checkpoint0080.pth"
 INPUT:
@@ -71,7 +70,7 @@ SOLVER:
     WEIGHT_DECAY:  0.0001
     WEIGHT_DECAY_BIAS: 0.0001
     LARGE_FC_LR: False
-    MAX_EPOCHS: 120
+    MAX_EPOCHS: 60
     CHECKPOINT_PERIOD: 5
     LOG_PERIOD: 50
     EVAL_PERIOD: 60
@@ -117,6 +116,6 @@ DATASETS:
 #OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep85_dino_encoder'
 #OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep20_dino_encoder_ratio'
 #OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep57_dino_encoder_ratio'
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_DINO_Pretrain_Prompt_learning_dinomsmt_ep60_dino_encoder_ratio'
+OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_on_MSMT_ep200_ratioDINO_Teacherlogit_01'
 
 # CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

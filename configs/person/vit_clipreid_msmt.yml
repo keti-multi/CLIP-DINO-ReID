@@ -12,6 +12,8 @@ MODEL:
   # SIE_COE : 1.0
 #  LRP : 'LRP'
   LRP : ''
+#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17/ViT-B-16_stage1_120.pth"
+
 INPUT:
   SIZE_TRAIN: [256, 128]
   SIZE_TEST: [256, 128]
@@ -68,7 +70,7 @@ TEST:
   WEIGHT: '/data/keti/syh/checkpoints/CLIP_ReID_KETI/ViT-B-16_60.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
-  GRADCAM : True
+  GRADCAM : False
 DATASETS:
 #   NAMES: ('market1501')
 #   ROOT_DIR: ('')
@@ -83,7 +85,9 @@ DATASETS:
 # OUTPUT_DIR: ''
 
   NAMES: ('msmt17')
-  ROOT_DIR: ('/media/syh/ssd2/data/ReID')
+  ROOT_DIR: ('/data/keti/syh/ReID')
 #OUTPUT_DIR: '/media/syh/hdd/checkpoints/CLIP_ReID_Clustered_Trained_Test_on_MSMT17'
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17_GradCAM_Test'
+#OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17_GradCAM_Test'
+OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17'
+
 # CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

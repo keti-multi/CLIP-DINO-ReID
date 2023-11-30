@@ -140,6 +140,9 @@ def do_train_stage2(cfg,
     from datetime import timedelta
     all_start_time = time.monotonic()
 
+    # additional loss
+    mse_loss = nn.MSELoss()
+
     # train
     batch = cfg.SOLVER.STAGE2.IMS_PER_BATCH
     i_ter = num_classes // batch
@@ -203,7 +206,14 @@ def do_train_stage2(cfg,
                 target_view = None
 
             with amp.autocast(enabled=True):
-                score, feat, image_features = model(x = img, label = target, cam_label=target_cam, view_label=target_view)
+                if cfg.MODEL.DINO_TEACHER:
+
+                    score, feat, image_features, teacher_feature = model(x=img, label=target, cam_label=target_cam,
+                                                    view_label=target_view)  # return [cls_score, cls_score_proj], [img_feature_last, img_feature,img_feature_proj], img_feature_proj
+
+                else:
+                    score, feat, image_features = model(x = img, label = target, cam_label=target_cam, view_label=target_view) # return [cls_score, cls_score_proj], [img_feature_last, img_feature,img_feature_proj], img_feature_proj
+
                 # for i in range(batch_size):
                 #     # show_heatmap_on_text(texts[i], text[i], R_text[i])
                 #     img_grad=show_image_relevance(R_image[i], img, orig_image=Image.open(img_path))
@@ -220,8 +230,17 @@ def do_train_stage2(cfg,
                 else:
                     logits = image_features @ text_features.t()
 
-
-                loss = loss_fn(score, feat, target, target_cam, logits)
+                if cfg.MODEL.DINO_TEACHER:
+                    # logits_teacher = image_features @ teacher_feature.t()
+                    # CLIP-ReID Loss
+                    loss = loss_fn(score, feat, target, target_cam, logits)
+                    # Teacher loss
+                    if cfg.MODEL.I2Teacher_LOSS_TYPE=='L2':
+                        loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(image_features,teacher_feature)
+                    else :
+                        raise(KeyboardInterrupt)
+                else:
+                    loss = loss_fn(score, feat, target, target_cam, logits)
 
             scaler.scale(loss).backward()
 

@@ -26,6 +26,7 @@ _C.MODEL.LAST_STRIDE = 1
 
 _C.MODEL.VISUAL_MODEL = 'clipreid_vit'
 
+
 # Path to pretrained model of backbone
 _C.MODEL.PRETRAIN_PATH = ''
 # Path to pretrained dino path
@@ -43,6 +44,9 @@ _C.MODEL.ID_LOSS_TYPE = 'softmax'
 _C.MODEL.ID_LOSS_WEIGHT = 1.0
 _C.MODEL.TRIPLET_LOSS_WEIGHT = 1.0
 _C.MODEL.I2T_LOSS_WEIGHT = 1.0
+_C.MODEL.DINO_TEACHER = False
+_C.MODEL.I2Teacher_LOSS_TYPE='L2'
+_C.MODEL.I2Teacher_LOSS_WEIGHT = 1.0
 
 _C.MODEL.METRIC_LOSS_TYPE = 'triplet'
 # If train with multi-gpu ddp mode, options: 'True', 'False'

@@ -3,7 +3,8 @@ import torch.nn as nn
 import numpy as np
 
 import model.clip.clip
-
+from model.clip.model import vit_base
+from utils import utils_dino
 
 from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 _tokenizer = _Tokenizer()
@@ -70,12 +71,26 @@ class build_transformer(nn.Module):
         self.num_classes = num_classes
         self.camera_num = camera_num
         self.view_num = view_num
-        self.sie_coe = cfg.MODEL.SIE_COE   
+        self.sie_coe = cfg.MODEL.SIE_COE
+        if cfg.MODEL.DINO_TEACHER:
+            # self.classifier = nn.Linear(self.in_planes*2, self.num_classes, bias=False)
+            # self.classifier.apply(weights_init_classifier)
+            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classifier.apply(weights_init_classifier)
+            self.classifier_self = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classifier_self.apply(weights_init_classifier)
+        else:
+            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classifier.apply(weights_init_classifier)
+        if cfg.MODEL.DINO_TEACHER:
+            self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
+            self.classifier_self_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
+            self.classifier_proj.apply(weights_init_classifier)
+            self.classifier_self_proj.apply(weights_init_classifier)
 
-        self.classifier = nn.Linear(self.in_planes*2, self.num_classes, bias=False)
-        self.classifier.apply(weights_init_classifier)
-        self.classifier_proj = nn.Linear(self.in_planes_proj*2, self.num_classes, bias=False)
-        self.classifier_proj.apply(weights_init_classifier)
+        else :
+            self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
+            self.classifier_proj.apply(weights_init_classifier)
 
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
@@ -96,13 +111,19 @@ class build_transformer(nn.Module):
             self.image_encoder = clip_model.dino
         elif cfg.MODEL.VISUAL_MODEL == 'clipreid_vit':
             self.image_encoder = clip_model.visual
-            self.dino_encoder = clip_model.dino
-            for param in self.dino_encoder.parameters():
-                param.requires_grad = False
+            if cfg.MODEL.DINO_TEACHER:
+
+                self.dino_encoder = vit_base(patch_size=16, num_classes=0,
+                                     img_size=[self.h_resolution * self.vision_stride_size, self.w_resolution * self.vision_stride_size])
+                utils_dino.load_pretrained_weights(self.dino_encoder, cfg.MODEL.DINO_PRETRAIN_PATH, 'teacher',
+                                                   'vit_base', 16)
+
+                for param in self.dino_encoder.parameters():
+                    param.requires_grad = False
         else:
             raise ValueError("The visual model is not predefined in the project.")
 
-
+        self.config=cfg
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num * view_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
@@ -239,25 +260,36 @@ class build_transformer(nn.Module):
             img_feature_last = image_features_last[:,0]
             img_feature = image_features[:,0]
             img_feature_proj = image_features_proj[:,0]
-
-            image_features_last_dino, image_features_dino, image_features_proj_dino = self.dino_encoder(x, cv_embed)
-            img_feature_last_dino = image_features_last_dino[:,0]
-            img_feature_dino = image_features_dino[:,0]
-            img_feature_proj_dino = image_features_proj_dino[:,0]
+            if self.config.MODEL.DINO_TEACHER:
+                image_features_last_dino, image_features_dino, image_features_proj_dino = self.dino_encoder(x, cv_embed)
+                img_feature_last_dino = image_features_last_dino[:,0]
+                img_feature_dino = image_features_dino[:,0]
+                img_feature_proj_dino = image_features_proj_dino[:,0]
 
 
 
         feat = self.bottleneck(img_feature) 
         feat_proj = self.bottleneck_proj(img_feature_proj)
-
-        feat_dino = self.bottleneck(img_feature_dino)
-        feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
+        if self.config.MODEL.DINO_TEACHER:
+            feat_dino = self.bottleneck(img_feature_dino)
+            feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
 
 
         if self.training:
-            cls_score = self.classifier(torch.cat((feat, feat_dino), dim=1))
-            cls_score_proj = self.classifier_proj(torch.cat((feat_proj,feat_proj_dino),dim=1))
-            return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj], img_feature_proj
+            # DINO teacher
+            if self.config.MODEL.DINO_TEACHER:
+                # Concat strategy
+                # cls_score = self.classifier(torch.cat((feat, feat_dino), dim=1))
+                # cls_score_proj = self.classifier_proj(torch.cat((feat_proj,feat_proj_dino),dim=1))
+                cls_score = self.classifier(feat)
+                cls_score_proj = self.classifier_proj(feat_proj)
+                return [cls_score, cls_score_proj], [img_feature_last, img_feature,
+                                                     img_feature_proj], img_feature_proj, img_feature_proj_dino
+            else:
+                cls_score = self.classifier(feat)
+                cls_score_proj = self.classifier_proj(feat_proj)
+                return [cls_score, cls_score_proj], [img_feature_last, img_feature,
+                                                         img_feature_proj], img_feature_proj
 
         else:
             if self.neck_feat == 'after':
@@ -333,7 +365,11 @@ class build_transformer(nn.Module):
             if 'student' in i:
                 continue
             if 'dino_vit' in i:
-                i=i.replace('dino_vit','image_encoder') # edit dino_vit to image_encoder
+                continue
+            #     i=i.replace('dino_vit','image_encoder') # edit dino_vit to image_encoder
+            if 'classifier'in i:
+                # continue
+                self.state_dict()[i.replace('module.', '')].copy_(param_dict[i])
             self.state_dict()[i.replace('module.', '')].copy_(param_dict[i])
         print('Loading pretrained model from {}'.format(trained_path))
 

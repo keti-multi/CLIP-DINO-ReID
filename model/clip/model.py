@@ -11,7 +11,7 @@ from model.ViT.weight_init import trunc_normal_
 from model.ViT.ViT_LRP import PatchEmbedReID, LayerNorm,Linear
 from model.modules.layers_ours import IndexSelect,Add
 
-from model.clip.auxilary import *
+# from model.clip.auxilary import *
 from functools import partial
 
 # Dino embedding
@@ -288,12 +288,45 @@ class QuickGELU(nn.Module):
     def forward(self, x: torch.Tensor):
         return x * torch.sigmoid(1.702 * x)
 
+# # MM-EXLPLAIN
+# class ResidualAttentionBlock(nn.Module):
+#     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+#         super().__init__()
+#
+#         self.attn = MultiheadAttention(d_model, n_head)
+#         self.ln_1 = LayerNorm(d_model)
+#         self.mlp = nn.Sequential(OrderedDict([
+#             ("c_fc", nn.Linear(d_model, d_model * 4)),
+#             ("gelu", QuickGELU()),
+#             ("c_proj", nn.Linear(d_model * 4, d_model))
+#         ]))
+#         self.ln_2 = LayerNorm(d_model)
+#         self.attn_mask = attn_mask
+#
+#         self.attn_probs = None
+#         self.attn_grad = None
+#
+#     def set_attn_probs(self, attn_probs):
+#         self.attn_probs = attn_probs
+#
+#     def set_attn_grad(self, attn_grad):
+#         self.attn_grad = attn_grad
+#
+#     def attention(self, x: torch.Tensor):
+#         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+#         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask, attention_probs_forward_hook=self.set_attn_probs,
+#                          attention_probs_backwards_hook=self.set_attn_grad)[0]
+#
+#     def forward(self, x: torch.Tensor):
+#         x = x + self.attention(self.ln_1(x))
+#         x = x + self.mlp(self.ln_2(x))
+#         return x
 
 class ResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
         super().__init__()
 
-        self.attn = MultiheadAttention(d_model, n_head)
+        self.attn = nn.MultiheadAttention(d_model, n_head)
         self.ln_1 = LayerNorm(d_model)
         self.mlp = nn.Sequential(OrderedDict([
             ("c_fc", nn.Linear(d_model, d_model * 4)),
@@ -303,25 +336,14 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
-        self.attn_probs = None
-        self.attn_grad = None
-
-    def set_attn_probs(self, attn_probs):
-        self.attn_probs = attn_probs
-
-    def set_attn_grad(self, attn_grad):
-        self.attn_grad = attn_grad
-
     def attention(self, x: torch.Tensor):
         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
-        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask, attention_probs_forward_hook=self.set_attn_probs,
-                         attention_probs_backwards_hook=self.set_attn_grad)[0]
+        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
 
     def forward(self, x: torch.Tensor):
         x = x + self.attention(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
-
 
 class Transformer(nn.Module):
     def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
@@ -713,8 +735,9 @@ class ContextCLIP(CLIP):
         super().__init__(embed_dim, image_resolution, vision_layers, vision_width, vision_patch_size,
                          vision_stride_size, context_length, vocab_size, transformer_width, transformer_heads,
                          transformer_layers, h_resolution, w_resolution)
-        self.dino = vit_base(patch_size=16, num_classes=0,img_size=[h_resolution*vision_patch_size,w_resolution*vision_patch_size])
-        utils_dino.load_pretrained_weights(self.dino, configs.MODEL.DINO_PRETRAIN_PATH, 'teacher', 'vit_base', 16)
+        if configs.MODEL.VISUAL_MODEL=='dino_vit' or configs.MODEL.DINO_TEACHER:
+            self.dino = vit_base(patch_size=16, num_classes=0,img_size=[h_resolution*vision_patch_size,w_resolution*vision_patch_size])
+            utils_dino.load_pretrained_weights(self.dino, configs.MODEL.DINO_PRETRAIN_PATH, 'teacher', 'vit_base', 16)
         pass
     def forward(self, image, text):
         return super().forward(image, text)
@@ -777,18 +800,18 @@ def build_model(state_dict: dict, h_resolution: int, w_resolution: int, vision_s
     transformer_heads = transformer_width // 64
     transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
 
-    # model = CLIP(
-    #     embed_dim,
-    #     image_resolution, vision_layers, vision_width, vision_patch_size, vision_stride_size,
-    #     context_length, vocab_size, transformer_width, transformer_heads, transformer_layers,
-    #     h_resolution, w_resolution,model_configs
-    # )
-    model = ContextCLIP(
+    model = CLIP(
         embed_dim,
         image_resolution, vision_layers, vision_width, vision_patch_size, vision_stride_size,
         context_length, vocab_size, transformer_width, transformer_heads, transformer_layers,
-        h_resolution, w_resolution,configs
+        h_resolution, w_resolution
     )
+    # model = ContextCLIP(
+    #     embed_dim,
+    #     image_resolution, vision_layers, vision_width, vision_patch_size, vision_stride_size,
+    #     context_length, vocab_size, transformer_width, transformer_heads, transformer_layers,
+    #     h_resolution, w_resolution,configs
+    # )
     if vit:
         state_dict["visual.positional_embedding"] = resize_pos_embed(state_dict["visual.positional_embedding"],
                                                                      model.visual.positional_embedding, h_resolution,
@@ -802,7 +825,8 @@ def build_model(state_dict: dict, h_resolution: int, w_resolution: int, vision_s
             del state_dict[key]
 
     convert_weights(model)
-    model.load_state_dict(state_dict,strict=False)
+    # model.load_state_dict(state_dict,strict=False)
+    model.load_state_dict(state_dict)
 
     return model.eval()
 

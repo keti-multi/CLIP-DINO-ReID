@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
 from .triplet_loss import TripletLoss
 from .center_loss import CenterLoss
-
+import torch.nn as nn
 
 def make_loss(cfg, num_classes):    # modified by gu
     sampler = cfg.DATALOADER.SAMPLER
@@ -34,52 +34,107 @@ def make_loss(cfg, num_classes):    # modified by gu
             return F.cross_entropy(score, target)
 
     elif cfg.DATALOADER.SAMPLER == 'softmax_triplet':
-        def loss_func(score, feat, target, target_cam, i2tscore = None):
-            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
-                if cfg.MODEL.IF_LABELSMOOTH == 'on':
-                    if isinstance(score, list):
-                        ID_LOSS = [xent(scor, target) for scor in score[0:]]
-                        ID_LOSS = sum(ID_LOSS)
-                    else:
-                        ID_LOSS = xent(score, target)
+        if cfg.MODEL.DINO_TEACHER:
+            def loss_func(score, feat, target, target_cam, i2tscore = None,self_feat=None):
+                if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
+                    if cfg.MODEL.IF_LABELSMOOTH == 'on':
+                        if isinstance(score, list):
+                            ID_LOSS = [xent(scor, target) for scor in score[0:]]
+                            ID_LOSS = sum(ID_LOSS)
+                        else:
+                            ID_LOSS = xent(score, target)
 
-                    if isinstance(feat, list):
-                        TRI_LOSS = [triplet(feats, target)[0] for feats in feat[0:]]
-                        TRI_LOSS = sum(TRI_LOSS) 
-                    else:   
-                        TRI_LOSS = triplet(feat, target)[0]
-                    
-                    loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-
-                    if i2tscore != None:
-                        I2TLOSS = xent(i2tscore, target)
-                        loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
-                        
-                    return loss
-                else:
-                    if isinstance(score, list):
-                        ID_LOSS = [F.cross_entropy(scor, target) for scor in score[0:]]
-                        ID_LOSS = sum(ID_LOSS)
-                    else:
-                        ID_LOSS = F.cross_entropy(score, target)
-
-                    if isinstance(feat, list):
+                        if isinstance(feat, list):
                             TRI_LOSS = [triplet(feats, target)[0] for feats in feat[0:]]
                             TRI_LOSS = sum(TRI_LOSS)
-                    else:
+                        else:
                             TRI_LOSS = triplet(feat, target)[0]
 
-                    loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-                    
-                    if i2tscore != None:
-                        I2TLOSS = F.cross_entropy(i2tscore, target)
-                        loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
+                        loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
+
+                        if i2tscore != None:
+                            I2TLOSS = xent(i2tscore, target)
+                            loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
+                        #
+                        # if i2selfscore != None:
+                        #     I2TeacherLOSS = nn.MSELoss
+                        #     loss = cfg.MODEL.I2Teacher_LOSS_WEIGHT * I2TeacherLOSS + loss
+                        return loss
+                    else:
+                        if isinstance(score, list):
+                            ID_LOSS = [F.cross_entropy(scor, target) for scor in score[0:]]
+                            ID_LOSS = sum(ID_LOSS)
+                        else:
+                            ID_LOSS = F.cross_entropy(score, target)
+
+                        if isinstance(feat, list):
+                                TRI_LOSS = [triplet(feats, target)[0] for feats in feat[0:]]
+                                TRI_LOSS = sum(TRI_LOSS)
+                        else:
+                                TRI_LOSS = triplet(feat, target)[0]
+
+                        loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
+
+                        if i2tscore != None:
+                            I2TLOSS = F.cross_entropy(i2tscore, target)
+                            loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
+
+                        if i2selfscore != None:
+                            I2TLOSS = F.cross_entropy(i2selfscore, target)
+                            loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
+
+                        return loss
+                else:
+                    print('expected METRIC_LOSS_TYPE should be triplet'
+                          'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+
+        else:
+            def loss_func(score, feat, target, target_cam, i2tscore = None):
+                if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
+                    if cfg.MODEL.IF_LABELSMOOTH == 'on':
+                        if isinstance(score, list):
+                            ID_LOSS = [xent(scor, target) for scor in score[0:]]
+                            ID_LOSS = sum(ID_LOSS)
+                        else:
+                            ID_LOSS = xent(score, target)
+
+                        if isinstance(feat, list):
+                            TRI_LOSS = [triplet(feats, target)[0] for feats in feat[0:]]
+                            TRI_LOSS = sum(TRI_LOSS)
+                        else:
+                            TRI_LOSS = triplet(feat, target)[0]
+
+                        loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
+
+                        if i2tscore != None:
+                            I2TLOSS = xent(i2tscore, target)
+                            loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
+
+                        return loss
+                    else:
+                        if isinstance(score, list):
+                            ID_LOSS = [F.cross_entropy(scor, target) for scor in score[0:]]
+                            ID_LOSS = sum(ID_LOSS)
+                        else:
+                            ID_LOSS = F.cross_entropy(score, target)
+
+                        if isinstance(feat, list):
+                                TRI_LOSS = [triplet(feats, target)[0] for feats in feat[0:]]
+                                TRI_LOSS = sum(TRI_LOSS)
+                        else:
+                                TRI_LOSS = triplet(feat, target)[0]
+
+                        loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
+
+                        if i2tscore != None:
+                            I2TLOSS = F.cross_entropy(i2tscore, target)
+                            loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
 
 
-                    return loss
-            else:
-                print('expected METRIC_LOSS_TYPE should be triplet'
-                      'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+                        return loss
+                else:
+                    print('expected METRIC_LOSS_TYPE should be triplet'
+                          'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
 
     else:
         print('expected sampler should be softmax, triplet, softmax_triplet or softmax_triplet_center'
