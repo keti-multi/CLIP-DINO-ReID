@@ -355,7 +355,6 @@ class Transformer(nn.Module):
     def forward(self, x: torch.Tensor):
         return self.resblocks(x)
 
-## Todo 231107 Edit relevance propagation model ViT - Original ViT of ClipReID
 class VisionTransformer(nn.Module):
     def __init__(self, h_resolution: int, w_resolution: int, patch_size: int, stride_size: int, width: int, layers: int, heads: int, output_dim: int):
         super().__init__()

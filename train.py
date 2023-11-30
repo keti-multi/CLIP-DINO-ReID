@@ -1,16 +1,18 @@
 from utils.logger import setup_logger
-from datasets.make_dataloader import make_dataloader
-from model.make_model_ import make_model
-from solver.make_optimizer import make_optimizer
+from datasets.make_dataloader_clipreid import make_dataloader
+from model.make_model_clipreid import make_model
+from solver.make_optimizer_prompt import make_optimizer_1stage, make_optimizer_2stage
+from solver.scheduler_factory import create_scheduler
 from solver.lr_scheduler import WarmupMultiStepLR
 from loss.make_loss import make_loss
-from processor.processor import do_train
+from processor.processor_clipreid_stage1 import do_train_stage1,do_train_stage1_cluster
+from processor.processor_clipreid_stage2 import do_train_stage2
 import random
 import torch
 import numpy as np
 import os
 import argparse
-from config import cfg_base as cfg
+from config import cfg
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -25,7 +27,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
-        "--config_file", default="configs/person/vit_base.yml", help="path to config file", type=str
+        "--config_file", default="configs/person/vit_clipreid.yml", help="path to config file", type=str
     )
 
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,
@@ -47,7 +49,7 @@ if __name__ == '__main__':
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    logger = setup_logger("transreid", output_dir, if_train=True)
+    logger = setup_logger("contextreid", output_dir, if_train=True)
     logger.info("Saving model in the path :{}".format(cfg.OUTPUT_DIR))
     logger.info(args)
 
@@ -61,27 +63,58 @@ if __name__ == '__main__':
     if cfg.MODEL.DIST_TRAIN:
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
-    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
+    train_loader_stage2, train_loader_stage1, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
-
+    if cfg.MODEL.PRETRAIN_PATH != '':
+        model.load_param(cfg.MODEL.PRETRAIN_PATH)
+        pretrain_epoch = int(cfg.MODEL.PRETRAIN_PATH.split('/')[-1].split('.')[0].split('_')[-1])
+        pretrain_stage = cfg.MODEL.PRETRAIN_PATH.split('/')[-1].split('.')[0].split('_')[-2]
+    else:
+        pretrain_epoch=-1
+        pretrain_stage = 'stage1'
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
 
-    optimizer, optimizer_center = make_optimizer(cfg, model, center_criterion)
+    optimizer_1stage = make_optimizer_1stage(cfg, model)
+    scheduler_1stage = create_scheduler(optimizer_1stage, num_epochs = cfg.SOLVER.STAGE1.MAX_EPOCHS, lr_min = cfg.SOLVER.STAGE1.LR_MIN, \
+                        warmup_lr_init = cfg.SOLVER.STAGE1.WARMUP_LR_INIT, warmup_t = cfg.SOLVER.STAGE1.WARMUP_EPOCHS, noise_range = None)
 
-    scheduler = WarmupMultiStepLR(optimizer, cfg.SOLVER.STEPS, cfg.SOLVER.GAMMA, cfg.SOLVER.WARMUP_FACTOR,
-                                  cfg.SOLVER.WARMUP_ITERS, cfg.SOLVER.WARMUP_METHOD)
+    if cfg.DATASETS.CLUSTER:
+        do_train_stage1_cluster(
+            cfg,
+            model,
+            train_loader_stage1,
+            optimizer_1stage,
+            scheduler_1stage,
+            args.local_rank
+        )
+    else:
+        if pretrain_epoch < int(cfg.SOLVER.STAGE1.MAX_EPOCHS):
+            do_train_stage1(
+                cfg,
+                model,
+                train_loader_stage1,
+                optimizer_1stage,
+                scheduler_1stage,
+                args.local_rank
+            )
+            pass
+        else:
+            pass
 
-    do_train(
+    optimizer_2stage, optimizer_center_2stage = make_optimizer_2stage(cfg, model, center_criterion)
+    scheduler_2stage = WarmupMultiStepLR(optimizer_2stage, cfg.SOLVER.STAGE2.STEPS, cfg.SOLVER.STAGE2.GAMMA, cfg.SOLVER.STAGE2.WARMUP_FACTOR,
+                                  cfg.SOLVER.STAGE2.WARMUP_ITERS, cfg.SOLVER.STAGE2.WARMUP_METHOD)
+
+    do_train_stage2(
         cfg,
         model,
         center_criterion,
-        train_loader,
+        train_loader_stage2,
         val_loader,
-        optimizer,
-        optimizer_center,
-        scheduler,
+        optimizer_2stage,
+        optimizer_center_2stage,
+        scheduler_2stage,
         loss_func,
         num_query, args.local_rank
     )

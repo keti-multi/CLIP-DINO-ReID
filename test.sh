@@ -27,5 +27,5 @@
 
 # 231117 test with msmt, imkaagenet pretrained model
 
-#python test_promptreid.py --config_file configs/person/vit_clipreid_promptbase_msmt_server_run_dino_imagenet.yml MODEL.DIST_TRAIN False
+#python test.py --config_file configs/person/vit_clipreid_promptbase_msmt_server_run_dino_imagenet.yml MODEL.DIST_TRAIN False
 python test_promptreid.py --config_file configs/person/vit_clipreid_promptbase_msmt_server_run_dino_msmt.yml MODEL.DIST_TRAIN False
