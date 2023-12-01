@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 
 import model.clip.clip
-from model.clip.model import vit_base
+from model.clip.dino import vit_base
 from utils import utils_dino
 
 from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
@@ -42,16 +42,16 @@ class TextEncoder(nn.Module):
         self.text_projection = clip_model.text_projection
         self.dtype = clip_model.dtype
 
-    def forward(self, prompts, tokenized_prompts): 
-        x = prompts + self.positional_embedding.type(self.dtype) 
-        x = x.permute(1, 0, 2)  # NLD -> LND 
-        x = self.transformer(x) 
+    def forward(self, prompts, tokenized_prompts):
+        x = prompts + self.positional_embedding.type(self.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x).type(self.dtype) 
+        x = self.ln_final(x).type(self.dtype)
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection 
+        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
         return x
 
 class build_transformer(nn.Module):
@@ -72,6 +72,7 @@ class build_transformer(nn.Module):
         self.camera_num = camera_num
         self.view_num = view_num
         self.sie_coe = cfg.MODEL.SIE_COE
+
         if cfg.MODEL.DINO_TEACHER:
             # self.classifier = nn.Linear(self.in_planes*2, self.num_classes, bias=False)
             # self.classifier.apply(weights_init_classifier)
@@ -82,6 +83,7 @@ class build_transformer(nn.Module):
         else:
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
+
         if cfg.MODEL.DINO_TEACHER:
             self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
             self.classifier_self_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
@@ -103,8 +105,7 @@ class build_transformer(nn.Module):
         self.w_resolution = int((cfg.INPUT.SIZE_TRAIN[1]-16)//cfg.MODEL.STRIDE_SIZE[1] + 1)
         self.vision_stride_size = cfg.MODEL.STRIDE_SIZE[0]
         # Load Clip
-        clip_model = load_clip_to_cpu(self.model_name, self.h_resolution, self.w_resolution, self.vision_stride_size,cfg)
-
+        clip_model = load_clip_to_cpu(self.model_name, self.h_resolution, self.w_resolution, self.vision_stride_size)
         clip_model.to("cuda")
 
         if cfg.MODEL.VISUAL_MODEL == 'dino_vit':
@@ -240,11 +241,11 @@ class build_transformer(nn.Module):
                 return image_features_proj[0]
             elif self.model_name == 'ViT-B-16':
                 return image_features_proj[:,0]
-        
+
         if self.model_name == 'RN50':
-            image_features_last, image_features, image_features_proj = self.image_encoder(x) 
-            img_feature_last = nn.functional.avg_pool2d(image_features_last, image_features_last.shape[2:4]).view(x.shape[0], -1) 
-            img_feature = nn.functional.avg_pool2d(image_features, image_features.shape[2:4]).view(x.shape[0], -1) 
+            image_features_last, image_features, image_features_proj = self.image_encoder(x)
+            img_feature_last = nn.functional.avg_pool2d(image_features_last, image_features_last.shape[2:4]).view(x.shape[0], -1)
+            img_feature = nn.functional.avg_pool2d(image_features, image_features.shape[2:4]).view(x.shape[0], -1)
             img_feature_proj = image_features_proj[0]
 
         elif self.model_name == 'ViT-B-16':
@@ -256,7 +257,7 @@ class build_transformer(nn.Module):
                 cv_embed = self.sie_coe * self.cv_embed[view_label]
             else:
                 cv_embed = None
-            image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed) 
+            image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed)
             img_feature_last = image_features_last[:,0]
             img_feature = image_features[:,0]
             img_feature_proj = image_features_proj[:,0]
@@ -268,13 +269,11 @@ class build_transformer(nn.Module):
 
 
 
-        feat = self.bottleneck(img_feature) 
+        feat = self.bottleneck(img_feature)
         feat_proj = self.bottleneck_proj(img_feature_proj)
         if self.config.MODEL.DINO_TEACHER:
             feat_dino = self.bottleneck(img_feature_dino)
             feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
-
-
         if self.training:
             # DINO teacher
             if self.config.MODEL.DINO_TEACHER:
@@ -386,7 +385,7 @@ def make_model(cfg, num_class, camera_num, view_num):
 
 
 from .clip import clip
-def load_clip_to_cpu(backbone_name, h_resolution, w_resolution, vision_stride_size,configs):
+def load_clip_to_cpu(backbone_name, h_resolution, w_resolution, vision_stride_size):
     url = clip._MODELS[backbone_name]
     model_path = clip._download(url)
 
@@ -398,7 +397,7 @@ def load_clip_to_cpu(backbone_name, h_resolution, w_resolution, vision_stride_si
     except RuntimeError:
         state_dict = torch.load(model_path, map_location="cpu")
 
-    model = clip.build_model(state_dict or model.state_dict(), h_resolution, w_resolution, vision_stride_size,configs)
+    model = clip.build_model(state_dict or model.state_dict(), h_resolution, w_resolution, vision_stride_size)
 
     return model
 
@@ -418,7 +417,7 @@ class PromptLearner(nn.Module):
         # use given words to initialize context vectors
         ctx_init = ctx_init.replace("_", " ")
         n_ctx = 4
-        
+
         tokenized_prompts = clip.tokenize(ctx_init).cuda()
 
         if dataset_name == 'msmt17clustered':
@@ -435,19 +434,19 @@ class PromptLearner(nn.Module):
             self.tokenized_prompts_clustered = tokenized_prompts_clustered
 
         n_cls_ctx = 4
-        cls_vectors = torch.empty(num_class, n_cls_ctx, ctx_dim, dtype=dtype) 
+        cls_vectors = torch.empty(num_class, n_cls_ctx, ctx_dim, dtype=dtype)
         nn.init.normal_(cls_vectors, std=0.02)
         self.cls_ctx = nn.Parameter(cls_vectors)  # n_classes, 4, 512
 
-        
+
         # These token vectors will be saved when in save_model(),
         # but they should be ignored in load_model() as we want to use
         # those computed using the current class names
-        self.register_buffer("token_prefix", embedding[:, :n_ctx + 1, :])  
+        self.register_buffer("token_prefix", embedding[:, :n_ctx + 1, :])
         self.register_buffer("token_suffix", embedding[:, n_ctx + 1 + n_cls_ctx: , :])
-        # if dataset_name == 'msmt17clustered':
-        self.register_buffer("token_prefix_cluster", embedding[:, :n_ctx + 1, :])
-        self.register_buffer("token_suffix_cluster", embedding[:, n_ctx + 1 + n_cls_ctx:, :])
+        if dataset_name == 'msmt17clustered':
+            self.register_buffer("token_prefix_cluster", embedding[:, :n_ctx + 1, :])
+            self.register_buffer("token_suffix_cluster", embedding[:, n_ctx + 1 + n_cls_ctx:, :])
         self.num_class = num_class
         self.n_cls_ctx = n_cls_ctx
 

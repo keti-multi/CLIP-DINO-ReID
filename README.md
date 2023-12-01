@@ -3,7 +3,7 @@
 
 ### Pipeline
 
-![framework](fig/method.png)
+[//]: # (![framework]&#40;fig/method.png&#41;)
 
 ### Installation
 

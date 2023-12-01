@@ -8,16 +8,11 @@ MODEL:
   ID_LOSS_WEIGHT : 0.25
   TRIPLET_LOSS_WEIGHT : 1.0
   I2T_LOSS_WEIGHT : 1.0
-
-#  I2Teacher_LOSS_TYPE : 'L2'
-#  I2Teacher_LOSS_WEIGHT : 0.1
-  VISUAL_MODEL : 'clipreid_vit'
-
-  # pure CLIP trained prompt parameter
-#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_pure_Test_on_MSMT17/ViT-B-16_stage1_120.pth"
-  DINO_TEACHER : False
-#  DINO_PRETRAIN_PATH : "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0200.pth"
-
+  # SIE_CAMERA: True
+  # SIE_COE : 1.0
+#  LRP : 'LRP'
+  LRP : ''
+#  PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17/ViT-B-16_stage1_120.pth"
 
 INPUT:
   SIZE_TRAIN: [256, 128]
@@ -27,7 +22,6 @@ INPUT:
   PADDING: 10
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
-  PROMPT_BASE : "A photo of a X X X X person." # 23.11.13 prompt test for Task-aware
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -48,7 +42,7 @@ SOLVER:
     CHECKPOINT_PERIOD: 120
     LOG_PERIOD: 50
     WARMUP_EPOCHS: 5
-
+  
   STAGE2:
     IMS_PER_BATCH: 64
     OPTIMIZER_NAME: "Adam"
@@ -60,25 +54,27 @@ SOLVER:
     WEIGHT_DECAY_BIAS: 0.0001
     LARGE_FC_LR: False
     MAX_EPOCHS: 60
-    CHECKPOINT_PERIOD: 5
+    CHECKPOINT_PERIOD: 60
     LOG_PERIOD: 50
     EVAL_PERIOD: 60
     BIAS_LR_FACTOR: 2
-
+    
     STEPS: [30, 50]
     GAMMA: 0.1
-
+  
 TEST:
   EVAL: True
-  IMS_PER_BATCH: 64
+  IMS_PER_BATCH: 1
   RE_RANKING: False
+#  WEIGHT: '/media/syh/hdd/checkpoints/CLIP_ReID_KETI_MSMT17CLSUTERED/ViT-B-16_60.pth'
+  WEIGHT: '/data/keti/syh/checkpoints/CLIP_ReID_KETI/ViT-B-16_60.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   GRADCAM : False
 DATASETS:
 #   NAMES: ('market1501')
 #   ROOT_DIR: ('')
-# OUTPUT_DIR: ''e
+# OUTPUT_DIR: ''
 
 #   NAMES: ('dukemtmc')
 #   ROOT_DIR: ('')
@@ -90,6 +86,8 @@ DATASETS:
 
   NAMES: ('msmt17')
   ROOT_DIR: ('/data/keti/syh/ReID')
+#OUTPUT_DIR: '/media/syh/hdd/checkpoints/CLIP_ReID_Clustered_Trained_Test_on_MSMT17'
+#OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17_GradCAM_Test'
+OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_Test_on_MSMT17'
 
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_baseline'
-
+# CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml
