@@ -209,7 +209,7 @@ def do_train_stage2(cfg,
                 if cfg.MODEL.DINO_TEACHER:
 
                     score, feat, image_features, teacher_feature = model(x=img, label=target, cam_label=target_cam,
-                                                    view_label=target_view)  # return [cls_score, cls_score_proj], [img_feature_last, img_feature,img_feature_proj], img_feature_proj
+                                                    view_label=target_view)  #                 return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj], img_feature_proj, img_feature_proj_dino
 
                 else:
                     score, feat, image_features = model(x = img, label = target, cam_label=target_cam, view_label=target_view) # return [cls_score, cls_score_proj], [img_feature_last, img_feature,img_feature_proj], img_feature_proj
@@ -219,7 +219,7 @@ def do_train_stage2(cfg,
                 #     img_grad=show_image_relevance(R_image[i], img, orig_image=Image.open(img_path))
                 #     plt.show()
                 if len(items)==5:
-                    ## Todo 230926 make max pooling in solo-clustered
+                    #
                     text_features_ = torch.cat((text_features, text_features_cluster), dim=0)
                     logits = image_features @ text_features_.t()
                     first_part = logits[:, :num_classes]
@@ -236,7 +236,16 @@ def do_train_stage2(cfg,
                     loss = loss_fn(score, feat, target, target_cam, logits)
                     # Teacher loss
                     if cfg.MODEL.I2Teacher_LOSS_TYPE=='L2':
-                        loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(image_features,teacher_feature)
+                        if cfg.MODEL.I2Teacher_POS == 1:
+                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-1],teacher_feature[-1])
+                        elif cfg.MODEL.I2Teacher_POS == 2:
+                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-2],teacher_feature[-2])
+
+                        elif cfg.MODEL.I2Teacher_POS == 3:
+                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-3],teacher_feature[-3])
+                        else:
+                            print("Unkown position for teacher")
+                            raise (KeyboardInterrupt)
                     else :
                         raise(KeyboardInterrupt)
                 else:

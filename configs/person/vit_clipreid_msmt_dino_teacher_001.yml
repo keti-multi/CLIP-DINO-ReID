@@ -9,15 +9,16 @@ MODEL:
   TRIPLET_LOSS_WEIGHT : 1.0
   I2T_LOSS_WEIGHT : 0.5
   I2Teacher_LOSS_TYPE : 'L2'
-  I2Teacher_LOSS_WEIGHT : 0.9
+  I2Teacher_LOSS_WEIGHT : 0.01
   VISUAL_MODEL : 'clipreid_vit'
 
-#  LRP : ''
+  LRP : ''
   # pure CLIP trained prompt parameter
   PRETRAIN_PATH : "/data/keti/syh/checkpoints/CLIP_ReID_pure_Test_on_MSMT17_re/ViT-B-16_stage1_120.pth"
   DINO_TEACHER : True
   DINO_PRETRAIN_PATH : "/data/keti/syh/exp/DINO_MSMT17_train_reid_shape_256_112_ratio_2_1/checkpoint0200.pth"
-#  DINO_PRETRAIN_PATH: "/data/keti/syh/exp/DINO_MSMT17_train/checkpoint0080.pth"
+
+
 INPUT:
   SIZE_TRAIN: [256, 128]
   SIZE_TEST: [256, 128]
@@ -90,5 +91,5 @@ DATASETS:
   NAMES: ('msmt17')
   ROOT_DIR: ('/data/keti/syh/ReID')
 
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_09'
+OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_001'
 

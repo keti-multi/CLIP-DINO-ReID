@@ -283,7 +283,8 @@ class build_transformer(nn.Module):
                 cls_score = self.classifier(feat)
                 cls_score_proj = self.classifier_proj(feat_proj)
                 return [cls_score, cls_score_proj], [img_feature_last, img_feature,
-                                                     img_feature_proj], img_feature_proj, img_feature_proj_dino
+                                                     img_feature_proj], img_feature_proj, [img_feature_last_dino, img_feature_dino,
+                                                     img_feature_proj_dino]
             else:
                 cls_score = self.classifier(feat)
                 cls_score_proj = self.classifier_proj(feat_proj)

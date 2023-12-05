@@ -45,8 +45,10 @@ _C.MODEL.ID_LOSS_WEIGHT = 1.0
 _C.MODEL.TRIPLET_LOSS_WEIGHT = 1.0
 _C.MODEL.I2T_LOSS_WEIGHT = 1.0
 _C.MODEL.DINO_TEACHER = False
+_C.MODEL.I2Teacher_POS=1
 _C.MODEL.I2Teacher_LOSS_TYPE='L2'
 _C.MODEL.I2Teacher_LOSS_WEIGHT = 1.0
+
 
 _C.MODEL.METRIC_LOSS_TYPE = 'triplet'
 # If train with multi-gpu ddp mode, options: 'True', 'False'
