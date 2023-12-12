@@ -9,8 +9,7 @@ MODEL:
   TRIPLET_LOSS_WEIGHT : 1.0
   I2T_LOSS_WEIGHT : 0.5
   I2Teacher_LOSS_TYPE : 'L2'
-  I2Teacher_LOSS_WEIGHT : 0.01
-  I2Teacher_POS: [2]
+  I2Teacher_LOSS_WEIGHT : 0.005
   VISUAL_MODEL : 'clipreid_vit'
 
   LRP : ''
@@ -92,5 +91,5 @@ DATASETS:
   NAMES: ('msmt17')
   ROOT_DIR: ('/data/keti/syh/ReID')
 
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_001_debug'
+OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005'
 

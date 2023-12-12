@@ -73,17 +73,23 @@ class build_transformer(nn.Module):
         self.view_num = view_num
         self.sie_coe = cfg.MODEL.SIE_COE
 
+
+        # classifier
         if cfg.MODEL.DINO_TEACHER:
             # self.classifier = nn.Linear(self.in_planes*2, self.num_classes, bias=False)
             # self.classifier.apply(weights_init_classifier)
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
-            self.classifier_self = nn.Linear(self.in_planes, self.num_classes, bias=False)
-            self.classifier_self.apply(weights_init_classifier)
+            if cfg.MODEL.DINO_TEACHER_HEAD:
+                self.classifier_self = DINOHead(self.in_planes, self.num_classes, use_bn=cfg.MODEL.DINO_TEACHER_HEAD_BN, norm_last_layer=cfg.MODEL.DINO_TEACHER_HEAD_LASTNORM, nlayers=3, hidden_dim=2048, bottleneck_dim=256)
+            else:
+                self.classifier_self = nn.Linear(self.in_planes, self.num_classes, bias=False)
+                self.classifier_self.apply(weights_init_classifier)
         else:
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
 
+        # projection
         if cfg.MODEL.DINO_TEACHER:
             self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
             self.classifier_self_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
@@ -257,12 +263,13 @@ class build_transformer(nn.Module):
                 cv_embed = self.sie_coe * self.cv_embed[view_label]
             else:
                 cv_embed = None
-            image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed)
+            image_features_last, image_features, image_features_proj,image_att = self.image_encoder(x, cv_embed)
             img_feature_last = image_features_last[:,0]
             img_feature = image_features[:,0]
             img_feature_proj = image_features_proj[:,0]
             if self.config.MODEL.DINO_TEACHER:
                 image_features_last_dino, image_features_dino, image_features_proj_dino = self.dino_encoder(x, cv_embed)
+                dino_att = self.dino_encoder.get_last_selfattention(x).mean(dim=1)[:, 0, 1:]
                 img_feature_last_dino = image_features_last_dino[:,0]
                 img_feature_dino = image_features_dino[:,0]
                 img_feature_proj_dino = image_features_proj_dino[:,0]
@@ -271,9 +278,9 @@ class build_transformer(nn.Module):
 
         feat = self.bottleneck(img_feature)
         feat_proj = self.bottleneck_proj(img_feature_proj)
-        if self.config.MODEL.DINO_TEACHER:
-            feat_dino = self.bottleneck(img_feature_dino)
-            feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
+        feat_dino = self.bottleneck(img_feature_dino)
+        feat_proj_dino = self.bottleneck_proj(img_feature_proj_dino)
+
         if self.training:
             # DINO teacher
             if self.config.MODEL.DINO_TEACHER:
@@ -282,9 +289,16 @@ class build_transformer(nn.Module):
                 # cls_score_proj = self.classifier_proj(torch.cat((feat_proj,feat_proj_dino),dim=1))
                 cls_score = self.classifier(feat)
                 cls_score_proj = self.classifier_proj(feat_proj)
+                if self.config.MODEL.DINO_TEACHER_BOTTLENECK:
+                    cls_score_self = self.classifier_self(feat_dino)
+                    cls_score_proj_self = self.classifier_self_proj(feat_proj_dino)
+                else:
+                    cls_score_self = self.classifier_self(img_feature_dino)
+                    cls_score_proj_self = self.classifier_self_proj(img_feature_proj_dino)
+
                 return [cls_score, cls_score_proj], [img_feature_last, img_feature,
-                                                     img_feature_proj], img_feature_proj, [img_feature_last_dino, img_feature_dino,
-                                                     img_feature_proj_dino]
+                                                     img_feature_proj], img_feature_proj, [cls_score_self,cls_score_proj_self],[img_feature_last_dino, img_feature_dino,
+                                                     img_feature_proj_dino],[image_att,dino_att]
             else:
                 cls_score = self.classifier(feat)
                 cls_score_proj = self.classifier_proj(feat_proj)
@@ -557,3 +571,38 @@ class PromptLearnerCluster(nn.Module):
 
         return prompts
 
+class DINOHead(nn.Module):
+    def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
+        super().__init__()
+        nlayers = max(nlayers, 1)
+        if nlayers == 1:
+            self.mlp = nn.Linear(in_dim, bottleneck_dim)
+        else:
+            layers = [nn.Linear(in_dim, hidden_dim)]
+            if use_bn:
+                layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.GELU())
+            for _ in range(nlayers - 2):
+                layers.append(nn.Linear(hidden_dim, hidden_dim))
+                if use_bn:
+                    layers.append(nn.BatchNorm1d(hidden_dim))
+                layers.append(nn.GELU())
+            layers.append(nn.Linear(hidden_dim, bottleneck_dim))
+            self.mlp = nn.Sequential(*layers)
+        self.apply(self._init_weights)
+        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+        self.last_layer.weight_g.data.fill_(1)
+        if norm_last_layer:
+            self.last_layer.weight_g.requires_grad = False
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        x = self.mlp(x)
+        x = nn.functional.normalize(x, dim=-1, p=2)
+        x = self.last_layer(x)
+        return x

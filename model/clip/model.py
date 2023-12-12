@@ -187,11 +187,19 @@ class ResidualAttentionBlock(nn.Module):
     def attention(self, x: torch.Tensor):
         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
-
-    def forward(self, x: torch.Tensor):
-        x = x + self.attention(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
+    def get_attention_map(self, x: torch.Tensor):
+        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+        return self.attn(x, x, x, average_attn_weights =True, attn_mask=self.attn_mask)
+    def forward(self, x: torch.Tensor,get_att=False):
+        if get_att:
+            out_,att_=self.get_attention_map(self.ln_1(x))
+            x = x + out_
+            x = x + self.mlp(self.ln_2(x))
+            return x,att_[:, 0, 1:]
+        else:
+            x = x + self.attention(self.ln_1(x))
+            x = x + self.mlp(self.ln_2(x))
+            return x
 # # MM-EXLPLAIN
 # class ResidualAttentionBlock(nn.Module):
 #     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
@@ -269,7 +277,7 @@ class VisionTransformer(nn.Module):
 
         x = x.permute(1, 0, 2)  # NLD -> LND # grid**2+1 , batch , width ex) [64, 129, 768] -> [129, 64, 768]
         x11 = self.transformer.resblocks[:11](x) # [129, 64, 768]
-        x12 = self.transformer.resblocks[11](x11) # [129, 64, 768]
+        x12,att = self.transformer.resblocks[11](x11,get_att=True) # [129, 64, 768]
         x11 = x11.permute(1, 0, 2)  # LND -> NLD ex) [64, 129, 768]
         x12 = x12.permute(1, 0, 2)  # LND -> NLD ex) [64, 129, 768]
 
@@ -277,10 +285,11 @@ class VisionTransformer(nn.Module):
 
         if self.proj is not None:
             xproj = x12 @ self.proj
-        return x11, x12, xproj # torch.Size([64, 129, 768]) torch.Size([64, 129, 768]) torch.Size([64, 129, 512])
+        return x11, x12, xproj,att # torch.Size([64, 129, 768]) torch.Size([64, 129, 768]) torch.Size([64, 129, 512])
         # x11 11th layer output
         # x12 12th layer output (last block)
         # xproj
+
 import utils.utils_dino as utils_dino
 
 

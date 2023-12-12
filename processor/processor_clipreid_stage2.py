@@ -141,8 +141,14 @@ def do_train_stage2(cfg,
     all_start_time = time.monotonic()
 
     # additional loss
-    mse_loss = nn.MSELoss()
-
+    if cfg.MODEL.I2Teacher_LOSS_TYPE == 'L2'or 'locall2':
+        teacher_loss = nn.MSELoss()
+    elif cfg.MODEL.I2Teacher_LOSS_TYPE == 'cosine' or 'local':
+        def cosineloss(f1,f2):
+            return (1-nn.functional.cosine_similarity(f1,f2)).mean()
+        teacher_loss = cosineloss
+    elif cfg.MODEL.I2Teacher_LOSS_TYPE == 'ce':
+        teacher_loss = F.cross_entropy
     # train
     batch = cfg.SOLVER.STAGE2.IMS_PER_BATCH
     i_ter = num_classes // batch
@@ -208,7 +214,7 @@ def do_train_stage2(cfg,
             with amp.autocast(enabled=True):
                 if cfg.MODEL.DINO_TEACHER:
 
-                    score, feat, image_features, teacher_feature = model(x=img, label=target, cam_label=target_cam,
+                    score, feat, image_features, score_self,teacher_feature,attentions = model(x=img, label=target, cam_label=target_cam,
                                                     view_label=target_view)  #                 return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj], img_feature_proj, img_feature_proj_dino
 
                 else:
@@ -230,22 +236,42 @@ def do_train_stage2(cfg,
                 else:
                     logits = image_features @ text_features.t()
 
+                # Self-Teacher Loss
                 if cfg.MODEL.DINO_TEACHER:
                     # logits_teacher = image_features @ teacher_feature.t()
                     # CLIP-ReID Loss
                     loss = loss_fn(score, feat, target, target_cam, logits)
                     # Teacher loss
-                    if cfg.MODEL.I2Teacher_LOSS_TYPE=='L2':
-                        if cfg.MODEL.I2Teacher_POS == 1:
-                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-1],teacher_feature[-1])
-                        elif cfg.MODEL.I2Teacher_POS == 2:
-                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-2],teacher_feature[-2])
-
-                        elif cfg.MODEL.I2Teacher_POS == 3:
-                            loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*mse_loss(feat[-3],teacher_feature[-3])
+                    if cfg.MODEL.I2Teacher_LOSS_TYPE in ['cosine','L2']:
+                        if type(cfg.MODEL.I2Teacher_POS)==int:
+                            cfg.MODEL.I2Teacher_POS=[cfg.MODEL.I2Teacher_POS]
+                        for pos in cfg.MODEL.I2Teacher_POS:
+                            if pos == 1:
+                                loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*teacher_loss(feat[-1],teacher_feature[-1])
+                            elif pos == 2:
+                                loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*teacher_loss(feat[-2],teacher_feature[-2])
+                            elif pos == 3:
+                                loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*teacher_loss(feat[-3],teacher_feature[-3])
+                            else:
+                                print("Unkown position for teacher")
+                                raise (KeyboardInterrupt)
+                    elif cfg.MODEL.I2Teacher_LOSS_TYPE in ['ce']:
+                        if isinstance(score_self, list):
+                            self_ID_LOSS = [F.cross_entropy(scor, target) for scor in score_self[0:]]
+                            self_ID_LOSS = sum(self_ID_LOSS)
                         else:
-                            print("Unkown position for teacher")
-                            raise (KeyboardInterrupt)
+                            self_ID_LOSS = F.cross_entropy(score_self, target)
+                        loss +=cfg.MODEL.ID_LOSS_WEIGHT*self_ID_LOSS
+                        if type(cfg.MODEL.I2Teacher_POS)==int:
+                            cfg.MODEL.I2Teacher_POS=[cfg.MODEL.I2Teacher_POS]
+                        for pos in cfg.MODEL.I2Teacher_POS:
+                            if pos == 1:
+                                loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*teacher_loss(score[-1],score_self[-1]) # minus?
+                            elif pos == 2:
+                                loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT*teacher_loss(score[-2],score_self[-2])
+
+                    elif cfg.MODEL.I2Teacher_LOSS_TYPE in ['local','locall2']:
+                        loss += cfg.MODEL.I2Teacher_LOSS_WEIGHT * teacher_loss(attentions[0], attentions[1])
                     else :
                         raise(KeyboardInterrupt)
                 else:
