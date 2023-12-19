@@ -78,8 +78,13 @@ def load_pretrained_weights(model, pretrained_weights, checkpoint_key, model_nam
         state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         # remove `backbone.` prefix induced by multicrop wrapper
         state_dict = {k.replace("backbone.", ""): v for k, v in state_dict.items()}
+        # syh pos embedding resize for new stride steps
+        from model.clip.model import resize_pos_embed
+        if state_dict['pos_embed'].shape != model.pos_embed.shape:
+            state_dict['pos_embed'] =  resize_pos_embed(state_dict['pos_embed'], model.pos_embed, 21, 10)
         msg = model.load_state_dict(state_dict, strict=False)
         print('Pretrained weights found at {} and loaded wiexth msg: {}'.format(pretrained_weights, msg))
+
     else:
         print("Please use the `--pretrained_weights` argument to indicate the path of the checkpoint to evaluate.")
         url = None

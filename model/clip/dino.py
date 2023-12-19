@@ -187,8 +187,9 @@ class VisionTransformer(nn.Module):
 
         elif len(self.img_size)==2:
             ratio = self.img_size[0]//self.img_size[1]
-            original_num_patches_vertically = int(ratio*math.sqrt(N//ratio))
             original_num_patches_horizontally= int(math.sqrt(N//ratio))
+            original_num_patches_vertically = N//original_num_patches_horizontally
+
         if npatch == N and w == h:
             return self.pos_embed
         class_pos_embed = self.pos_embed[:, 0]

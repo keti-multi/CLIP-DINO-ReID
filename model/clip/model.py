@@ -169,43 +169,12 @@ class QuickGELU(nn.Module):
     def forward(self, x: torch.Tensor):
         return x * torch.sigmoid(1.702 * x)
 
-
-class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
-        super().__init__()
-
-        self.attn = nn.MultiheadAttention(d_model, n_head)
-        self.ln_1 = LayerNorm(d_model)
-        self.mlp = nn.Sequential(OrderedDict([
-            ("c_fc", nn.Linear(d_model, d_model * 4)),
-            ("gelu", QuickGELU()),
-            ("c_proj", nn.Linear(d_model * 4, d_model))
-        ]))
-        self.ln_2 = LayerNorm(d_model)
-        self.attn_mask = attn_mask
-
-    def attention(self, x: torch.Tensor):
-        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
-        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
-    def get_attention_map(self, x: torch.Tensor):
-        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
-        return self.attn(x, x, x, average_attn_weights =True, attn_mask=self.attn_mask)
-    def forward(self, x: torch.Tensor,get_att=False):
-        if get_att:
-            out_,att_=self.get_attention_map(self.ln_1(x))
-            x = x + out_
-            x = x + self.mlp(self.ln_2(x))
-            return x,att_[:, 0, 1:]
-        else:
-            x = x + self.attention(self.ln_1(x))
-            x = x + self.mlp(self.ln_2(x))
-            return x
-# # MM-EXLPLAIN
+#
 # class ResidualAttentionBlock(nn.Module):
 #     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
 #         super().__init__()
 #
-#         self.attn = MultiheadAttention(d_model, n_head)
+        self.attn = nn.MultiheadAttention(d_model, n_head)
 #         self.ln_1 = LayerNorm(d_model)
 #         self.mlp = nn.Sequential(OrderedDict([
 #             ("c_fc", nn.Linear(d_model, d_model * 4)),
@@ -215,26 +184,76 @@ class ResidualAttentionBlock(nn.Module):
 #         self.ln_2 = LayerNorm(d_model)
 #         self.attn_mask = attn_mask
 #
-#         self.attn_probs = None
-#         self.attn_grad = None
-#
-#     def set_attn_probs(self, attn_probs):
-#         self.attn_probs = attn_probs
-#
-#     def set_attn_grad(self, attn_grad):
-#         self.attn_grad = attn_grad
-#
 #     def attention(self, x: torch.Tensor):
 #         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
-#         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask, attention_probs_forward_hook=self.set_attn_probs,
-#                          attention_probs_backwards_hook=self.set_attn_grad)[0]
-#
-#     def forward(self, x: torch.Tensor):
-#         x = x + self.attention(self.ln_1(x))
-#         x = x + self.mlp(self.ln_2(x))
-#         return x
+#         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
+#     def get_attention_map(self, x: torch.Tensor):
+#         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+#         return self.attn(x, x, x, average_attn_weights =True, attn_mask=self.attn_mask)
+#     def forward(self, x: torch.Tensor,get_att=False):
+#         if get_att:
+#             out_,att_=self.get_attention_map(self.ln_1(x))
+#             x = x + out_
+#             x = x + self.mlp(self.ln_2(x))
+#             return x,att_[:, 0, 1:]
+#         else:
+#             x = x + self.attention(self.ln_1(x))
+#             x = x + self.mlp(self.ln_2(x))
+#             return x
+# # MM-EXLPLAIN
+from model.clip.auxilary import MultiheadAttention
+class ResidualAttentionBlock(nn.Module):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+        super().__init__()
 
+        self.attn = MultiheadAttention(d_model, n_head)
+        self.ln_1 = LayerNorm(d_model)
+        self.mlp = nn.Sequential(OrderedDict([
+            ("c_fc", nn.Linear(d_model, d_model * 4)),
+            ("gelu", QuickGELU()),
+            ("c_proj", nn.Linear(d_model * 4, d_model))
+        ]))
+        self.ln_2 = LayerNorm(d_model)
+        self.attn_mask = attn_mask
 
+        self.attn_probs = None
+        self.attn_grad = None
+
+    def set_attn_probs(self, attn_probs):
+        self.attn_probs = attn_probs
+
+    def set_attn_grad(self, attn_grad):
+        self.attn_grad = attn_grad
+    # for attention map matching
+    def get_attention_map(self, x: torch.Tensor):
+        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+        return self.attn(x, x, x, attn_mask=self.attn_mask)
+
+    # for gradCAM
+    def attention(self, x: torch.Tensor):
+        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask, attention_probs_forward_hook=self.set_attn_probs,
+                         attention_probs_backwards_hook=self.set_attn_grad)
+    def forward(self, x: torch.Tensor,get_att=False):
+        # if get_att:
+        #     out_,att_=self.get_attention_map(self.ln_1(x))
+        #     x = x + out_
+        #     x = x + self.mlp(self.ln_2(x))
+        #     return x,att_[:, 0, 1:]
+        # else:
+        #     x = x + self.attention(self.ln_1(x))
+        #     x = x + self.mlp(self.ln_2(x))
+        #     return x
+        if get_att:
+            out,att=self.attention(self.ln_1(x))
+            x = x + out
+            x = x + self.mlp(self.ln_2(x))
+            return x,att
+        else :
+            out, att = self.attention(self.ln_1(x))
+            x = x + out
+            x = x + self.mlp(self.ln_2(x))
+            return x
 
 class Transformer(nn.Module):
     def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
@@ -505,16 +524,27 @@ def resize_pos_embed(posemb, posemb_new, hight, width):
     # Rescale the grid of position embeddings when loading from state_dict. Adapted from
     # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
     print('Resized position embedding: %s to %s', posemb.shape, posemb_new.shape)
-
+    is_dino = False
+    if len(posemb.shape) == 3 :
+        is_dino=True
+        posemb=posemb[0]
+        posemb_new=posemb_new[0]
     ntok_new = posemb_new.shape[0] #129,2048
 
     posemb_token, posemb_grid = posemb[:1], posemb[1:]
     ntok_new -= 1
-
-    gs_old = int(math.sqrt(len(posemb_grid))) #14
+    if is_dino:
+        gs_old_h = 16
+        gs_old_w = 8
+    else:
+        gs_old_h = int(math.sqrt(len(posemb_grid))) #14
+        gs_old_w = int(math.sqrt(len(posemb_grid)))
     print('Position embedding resize to height:{} width: {}'.format(hight, width))
-    posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
+    posemb_grid = posemb_grid.reshape(1, gs_old_h, gs_old_w, -1).permute(0, 3, 1, 2)
     posemb_grid = F.interpolate(posemb_grid, size=(hight, width), mode='bilinear')
     posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, hight * width, -1)
     posemb = torch.cat([posemb_token, posemb_grid.squeeze()], dim=0)
-    return posemb
+    if is_dino:
+        return posemb.unsqueeze(dim=0)
+    else:
+        return posemb

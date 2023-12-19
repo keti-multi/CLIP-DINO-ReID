@@ -120,8 +120,10 @@ class build_transformer(nn.Module):
             self.image_encoder = clip_model.visual
             if cfg.MODEL.DINO_TEACHER:
 
+                # self.dino_encoder = vit_base(patch_size=16, num_classes=0,
+                #                      img_size=[self.h_resolution * self.vision_stride_size, self.w_resolution * self.vision_stride_size])
                 self.dino_encoder = vit_base(patch_size=16, num_classes=0,
-                                     img_size=[self.h_resolution * self.vision_stride_size, self.w_resolution * self.vision_stride_size])
+                                     img_size=[self.h_resolution * 16, self.w_resolution * 16])
                 utils_dino.load_pretrained_weights(self.dino_encoder, cfg.MODEL.DINO_PRETRAIN_PATH, 'teacher',
                                                    'vit_base', 16)
 
@@ -194,10 +196,10 @@ class build_transformer(nn.Module):
                 continue
             if 'DINO' in str(type(self.image_encoder)):
                 grad = torch.autograd.grad(one_hot, [blk.attn], retain_graph=True)[0].detach()
-                qcam = blk.attn.detach()
+                cam = blk.attn.detach()
             else:
                 grad = torch.autograd.grad(one_hot, [blk.attn_probs], retain_graph=True)[0].detach()
-                qcam = blk.attn_probs.detach()
+                cam = blk.attn_probs.detach()
             cam = cam.reshape(-1, cam.shape[-1], cam.shape[-1])
             grad = grad.reshape(-1, grad.shape[-1], grad.shape[-1])
             cam = grad * cam
@@ -242,14 +244,14 @@ class build_transformer(nn.Module):
             return text_features#,text_out
 
         if get_image == True:
-            image_features_last, image_features, image_features_proj = self.image_encoder(x)
+            image_features_last, image_features, image_features_proj,_ = self.image_encoder(x)
             if self.model_name == 'RN50':
                 return image_features_proj[0]
             elif self.model_name == 'ViT-B-16':
                 return image_features_proj[:,0]
 
         if self.model_name == 'RN50':
-            image_features_last, image_features, image_features_proj = self.image_encoder(x)
+            image_features_last, image_features, image_features_proj,_ = self.image_encoder(x)
             img_feature_last = nn.functional.avg_pool2d(image_features_last, image_features_last.shape[2:4]).view(x.shape[0], -1)
             img_feature = nn.functional.avg_pool2d(image_features, image_features.shape[2:4]).view(x.shape[0], -1)
             img_feature_proj = image_features_proj[0]
