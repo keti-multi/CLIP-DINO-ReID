@@ -124,8 +124,9 @@ class build_transformer(nn.Module):
                 #                      img_size=[self.h_resolution * self.vision_stride_size, self.w_resolution * self.vision_stride_size])
                 self.dino_encoder = vit_base(patch_size=16, num_classes=0,
                                      img_size=[self.h_resolution * 16, self.w_resolution * 16])
-                utils_dino.load_pretrained_weights(self.dino_encoder, cfg.MODEL.DINO_PRETRAIN_PATH, 'teacher',
-                                                   'vit_base', 16)
+                if cfg.TEST.WEIGHT == '':
+                    utils_dino.load_pretrained_weights(self.dino_encoder, cfg.MODEL.DINO_PRETRAIN_PATH, 'teacher',
+                                                       'vit_base', 16)
 
                 for param in self.dino_encoder.parameters():
                     param.requires_grad = False

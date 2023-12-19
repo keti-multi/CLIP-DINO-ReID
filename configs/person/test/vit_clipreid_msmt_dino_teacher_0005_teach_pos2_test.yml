@@ -76,7 +76,9 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   GRADCAM : True
-  WEIGHT : '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2/ViT-B-16_60.pth'
+#  WEIGHT : '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2/ViT-B-16_60.pth'
+  WEIGHT: '/media/syh/hdd/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2/ViT-B-16_60.pth'
+
 DATASETS:
 #   NAMES: ('market1501')
 #   ROOT_DIR: ('')
@@ -91,7 +93,7 @@ DATASETS:
 # OUTPUT_DIR: ''
 
   NAMES: ('msmt17')
-  ROOT_DIR: ('/data/keti/syh/ReID')
+  ROOT_DIR: ('/media/syh/ssd2/data/ReID')
 
-OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2_test'
-
+#OUTPUT_DIR: '/data/keti/syh/checkpoints/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2_test'
+OUTPUT_DIR: '/media/syh/hdd/CLIP_ReID_MSMT_DINO_Teacher_0005_teach_pos2_test'

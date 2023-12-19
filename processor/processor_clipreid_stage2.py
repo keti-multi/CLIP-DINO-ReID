@@ -447,7 +447,7 @@ def do_inference(cfg,
 
                     for i in range(img.shape[0]):
                         # show_heatmap_on_text(texts[i], text[i], R_text[i])
-                        img_grad_list.append(show_image_relevance_reid(R_image[i], img[i], orig_image=Image.open(os.path.join("/data/keti/syh/ReID/MSMT17/test",imgpath[i][:4],imgpath[i]))))
+                        img_grad_list.append(show_image_relevance_reid(R_image[i], img[i], orig_image=Image.open(os.path.join(os.path.join(cfg.DATASETS.ROOT_DIR,cfg.DATASETS.NAMES.upper(),"test"),imgpath[i][:4],imgpath[i]))))
                         # plt.show()
                     del R_image
                     torch.cuda.empty_cache()
